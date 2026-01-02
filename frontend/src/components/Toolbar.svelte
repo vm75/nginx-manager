@@ -79,7 +79,7 @@
 
 <div class="toolbar">
   <div class="toolbar-left">
-    <h1>🔧 Nginx Config Editor</h1>
+    <h1><img src="../logo.png" alt="Logo" style="height: 18px; vertical-align: middle;" /> Nginx Manager</h1>
   </div>
 
   <div class="toolbar-center">
