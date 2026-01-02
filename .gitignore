@@ -1,0 +1,13 @@
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+/nginx-editor
+/frontend/node_modules/
+/frontend/dist/
+/test-config/
+.DS_Store
+*.log
+/etc

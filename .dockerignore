@@ -1,0 +1,30 @@
+# Git
+.git
+.gitignore
+
+# Build artifacts
+nginx-editor
+frontend/node_modules
+frontend/dist
+
+# Development files
+*.log
+*.pid
+.DS_Store
+test-config/
+
+# Documentation
+*.md
+!README.md
+
+# CI/CD
+.github/
+
+# IDE
+.vscode/
+.idea/
+
+# Temporary files
+tmp/
+*.tmp
+*.swp

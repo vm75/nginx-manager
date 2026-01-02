@@ -1,0 +1,53 @@
+[DEFAULT]
+# Ban settings
+bantime  = 3600
+findtime = 600
+maxretry = 5
+backend = auto
+destemail = root@localhost
+sender = fail2ban@localhost
+mta = sendmail
+protocol = tcp
+chain = INPUT
+banaction = iptables-multiport
+action = %(action_)s
+
+# Disable default SSH jails (no SSH in this container)
+[sshd]
+enabled = false
+
+[sshd-ddos]
+enabled = false
+
+[alpine-sshd]
+enabled = false
+
+[alpine-sshd-ddos]
+enabled = false
+
+[nginx-http-auth]
+enabled = true
+port    = http,https
+logpath = /var/log/nginx/error.log
+maxretry = 3
+
+[nginx-noscript]
+enabled = false
+
+[nginx-badbots]
+enabled = false
+
+[nginx-noproxy]
+enabled = false
+
+[nginx-limit-req]
+enabled = true
+port    = http,https
+logpath = /var/log/nginx/error.log
+maxretry = 10
+
+[nginx-botsearch]
+enabled = true
+port    = http,https
+logpath = /var/log/nginx/access.log
+maxretry = 2
