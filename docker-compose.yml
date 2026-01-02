@@ -1,9 +1,10 @@
 services:
-  nginx-proxy:
+  nginx-manager:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: nginx-proxy
+    image: vm75/nginx-manager:latest
+    container_name: nginx-manager
     restart: unless-stopped
     ports:
       - "80:80"
@@ -11,16 +12,16 @@ services:
       - "8080:8080"
     volumes:
       # Nginx configuration (persistent)
-      - /DATA/docker/nginx-proxy/config:/etc/nginx
+      - /DATA/docker/nginx-manager/config:/etc/nginx
       # Nginx logs
-      - /DATA/docker/nginx-proxy/logs:/var/log/nginx
+      - /DATA/docker/nginx-manager/logs:/var/log/nginx
       # Fail2ban logs
-      - /DATA/docker/nginx-proxy/fail2ban:/var/log/fail2ban
+      - /DATA/docker/nginx-manager/fail2ban:/var/log/fail2ban
       # SSL certificates (if using Let's Encrypt)
-      - /DATA/docker/nginx-proxy/certs:/etc/nginx/ssl
+      - /DATA/docker/nginx-manager/certs:/etc/nginx/ssl
     environment:
       - TZ=UTC
-      - NGINX_EDITOR_PORT=8080
+      - NGINX_MANAGER_PORT=8080
       - CERT_RENEWAL_DAYS=5
     cap_add:
       - NET_ADMIN

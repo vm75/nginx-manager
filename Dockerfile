@@ -12,9 +12,9 @@ WORKDIR /build
 COPY go.mod ./
 COPY main.go ./
 COPY --from=frontend-builder /build/dist ./frontend/dist
-RUN go build -o nginx-editor main.go
+RUN go build -o nginx-manager main.go
 
-FROM alpine:3.19
+FROM alpine:latest
 
 # Install nginx, fail2ban, lego, cron, and other dependencies
 RUN apk add --no-cache \
@@ -29,6 +29,7 @@ RUN apk add --no-cache \
     dcron \
     openssl \
     wget \
+    logrotate \
     && wget -O /tmp/lego.tar.gz https://github.com/go-acme/lego/releases/download/v4.15.0/lego_v4.15.0_linux_amd64.tar.gz \
     && tar -xzf /tmp/lego.tar.gz -C /usr/local/bin \
     && chmod +x /usr/local/bin/lego \
@@ -47,9 +48,26 @@ RUN mkdir -p /var/log/nginx \
     /etc/fail2ban/action.d \
     /etc/fail2ban/jail.d
 
-# Copy nginx-editor binary
-COPY --from=backend-builder /build/nginx-editor /usr/local/bin/nginx-editor
-RUN chmod +x /usr/local/bin/nginx-editor
+# Create logrotate configuration for nginx
+RUN mkdir -p /etc/logrotate.d
+RUN cat <<EOF > /etc/logrotate.d/nginx
+/var/log/nginx/*.log /var/log/fail2ban/*.log /var/log/supervisor/*.log {
+    daily
+    missingok
+    rotate 7
+    compress
+    delaycompress
+    notifempty
+    create 0644 root root
+    postrotate
+        /usr/sbin/nginx -s reload
+    endscript
+}
+EOF
+
+# Copy nginx-manager binary
+COPY --from=backend-builder /build/nginx-manager /usr/local/bin/nginx-manager
+RUN chmod +x /usr/local/bin/nginx-manager
 
 # Copy fail2ban configurations
 COPY docker/fail2ban/jail.local /etc/fail2ban/jail.local
@@ -67,8 +85,8 @@ COPY docker/supervisor/supervisord.conf /etc/supervisord.conf
 COPY docker/renew-certs.sh /usr/local/bin/renew-certs.sh
 RUN chmod +x /usr/local/bin/renew-certs.sh
 
-# Setup cron job for certificate renewal (daily at 2 AM)
-RUN echo '0 2 * * * /usr/local/bin/renew-certs.sh >> /var/log/cert-renewal.log 2>&1' > /etc/crontabs/root \
+# Setup cron job for certificate renewal (daily at 2 AM) and logrotate (daily at midnight)
+RUN echo -e '0 0 * * * /usr/sbin/logrotate /etc/logrotate.d/nginx\n0 2 * * * /usr/local/bin/renew-certs.sh >> /var/log/cert-renewal.log 2>&1' > /etc/crontabs/root \
     && touch /var/log/cert-renewal.log
 
 # Copy entrypoint script

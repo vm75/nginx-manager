@@ -1,3 +1,3 @@
-module nginx-editor
+module nginx-manager
 
 go 1.21

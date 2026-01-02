@@ -1,11 +1,19 @@
 <script>
   import { onMount } from 'svelte';
+  import { apiFetch } from '../lib/api';
+  import ConfirmModal from './ConfirmModal.svelte';
+  import AlertModal from './AlertModal.svelte';
 
   let certificates = [];
   let loading = false;
   let showObtainModal = false;
   let obtaining = false;
   let deleting = null;
+  let showDeleteConfirm = false;
+  let deleteParams = null;
+  let showAlertModal = false;
+  let alertTitle = '';
+  let alertMessage = '';
 
   // Form data
   let domain = '';
@@ -37,7 +45,7 @@
   async function loadCertificates() {
     loading = true;
     try {
-      const response = await fetch('/api/certificates');
+      const response = await apiFetch('/api/certificates');
       certificates = await response.json();
     } catch (error) {
       console.error('Failed to load certificates:', error);
@@ -46,14 +54,19 @@
     }
   }
 
-  async function deleteCertificate(domain, certFile, keyFile) {
-    if (!confirm(`Are you sure you want to delete the certificate for ${domain}?\n\nThis will delete:\n- ${certFile}\n- ${keyFile || 'No key file'}`)) {
-      return;
-    }
+  function deleteCertificate(domain, certFile, keyFile) {
+    deleteParams = { domain, certFile, keyFile };
+    showDeleteConfirm = true;
+  }
+
+  async function handleConfirmDelete() {
+    const { domain, certFile, keyFile } = deleteParams;
+    showDeleteConfirm = false;
+    deleteParams = null;
 
     deleting = domain;
     try {
-      const response = await fetch('/api/certificates/delete', {
+      const response = await apiFetch('/api/certificates/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ certFile, keyFile })
@@ -62,31 +75,46 @@
       const result = await response.json();
 
       if (result.success) {
-        alert('Certificate deleted successfully');
+        showAlert('Success', 'Certificate deleted successfully');
         loadCertificates();
       } else {
-        alert('Failed to delete certificate: ' + result.error);
+        showAlert('Error', 'Failed to delete certificate: ' + result.error);
       }
     } catch (error) {
-      alert('Error: ' + error.message);
+      showAlert('Error', 'Error: ' + error.message);
     } finally {
       deleting = null;
     }
   }
 
+  function handleCancelDelete() {
+    showDeleteConfirm = false;
+    deleteParams = null;
+  }
+
+  function showAlert(title, message) {
+    alertTitle = title;
+    alertMessage = message;
+    showAlertModal = true;
+  }
+
+  function handleAlertOk() {
+    showAlertModal = false;
+  }
+
   async function obtainCertificate() {
     if (!domain || !email) {
-      alert('Please fill in domain and email');
+      showAlert('Validation Error', 'Please fill in domain and email');
       return;
     }
 
     if ((challenge === 'dns-01' || wildcard) && !provider) {
-      alert('Please specify a DNS provider');
+      showAlert('Validation Error', 'Please specify a DNS provider');
       return;
     }
 
     if ((challenge === 'dns-01' || wildcard) && envVars.every(v => !v.key || !v.value)) {
-      alert('Please provide at least one environment variable for your DNS provider');
+      showAlert('Validation Error', 'Please provide at least one environment variable for your DNS provider');
       return;
     }
 
@@ -111,7 +139,7 @@
         });
       }
 
-      const response = await fetch('/api/certificates/obtain', {
+      const response = await apiFetch('/api/certificates/obtain', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -120,15 +148,15 @@
       const result = await response.json();
 
       if (result.success) {
-        alert('Certificate obtained successfully!\n\nCert: ' + result.certFile + '\nKey: ' + result.keyFile);
+        showAlert('Success', 'Certificate obtained successfully!\n\nCert: ' + result.certFile + '\nKey: ' + result.keyFile);
         showObtainModal = false;
         resetForm();
         loadCertificates();
       } else {
-        alert('Failed to obtain certificate:\n\n' + (result.error || result.output));
+        showAlert('Error', 'Failed to obtain certificate:\n\n' + (result.error || result.output));
       }
     } catch (error) {
-      alert('Error: ' + error.message);
+      showAlert('Error', 'Error: ' + error.message);
     } finally {
       obtaining = false;
     }
@@ -445,6 +473,27 @@
       </div>
     </div>
   </div>
+{/if}
+
+{#if showDeleteConfirm}
+  <ConfirmModal
+    title="Delete Certificate"
+    message={`Are you sure you want to delete the certificate for ${deleteParams?.domain}?\n\nThis will delete:\n- ${deleteParams?.certFile}\n- ${deleteParams?.keyFile || 'No key file'}`}
+    confirmText="Delete"
+    cancelText="Cancel"
+    on:confirm={handleConfirmDelete}
+    on:cancel={handleCancelDelete}
+    bind:show={showDeleteConfirm}
+  />
+{/if}
+
+{#if showAlertModal}
+  <AlertModal
+    title={alertTitle}
+    message={alertMessage}
+    on:ok={handleAlertOk}
+    bind:show={showAlertModal}
+  />
 {/if}
 
 <style>

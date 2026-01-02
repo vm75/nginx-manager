@@ -1,7 +1,12 @@
 <script>
   import { createEventDispatcher } from 'svelte';
+  import { apiFetch } from '../lib/api';
+  import ConfirmModal from './ConfirmModal.svelte';
+  import AlertModal from './AlertModal.svelte';
 
   export let currentView;
+  export let configStatus = 'unknown';
+  export let testConfig = null;
 
   const dispatch = createEventDispatcher();
 
@@ -9,39 +14,62 @@
   let showTestModal = false;
   let testing = false;
   let reloading = false;
+  let showConfirmModal = false;
+  let showAlertModal = false;
+  let alertTitle = '';
+  let alertMessage = '';
 
   async function testNginx() {
     testing = true;
     try {
-      const response = await fetch('/api/nginx/test', { method: 'POST' });
+      const response = await apiFetch('/api/nginx/test', { method: 'POST' });
       const result = await response.json();
       testOutput = result.output;
       showTestModal = true;
+      if (testConfig) {
+        testConfig(result.success ? 'ok' : 'error');
+      }
     } catch (error) {
       testOutput = `Error: ${error.message}`;
       showTestModal = true;
+      if (testConfig) {
+        testConfig('error');
+      }
     } finally {
       testing = false;
     }
   }
 
   async function reloadNginx() {
-    if (!confirm('Are you sure you want to reload nginx?')) return;
+    showConfirmModal = true;
+  }
 
+  async function handleConfirmReload() {
+    showConfirmModal = false;
     reloading = true;
     try {
-      const response = await fetch('/api/nginx/reload', { method: 'POST' });
+      const response = await apiFetch('/api/nginx/reload', { method: 'POST' });
       const result = await response.json();
-      alert(result.success ? 'Nginx reloaded successfully' : `Error: ${result.output}`);
+      showAlert(result.success ? 'Success' : 'Error', result.success ? 'Nginx reloaded successfully' : `Error: ${result.output}`);
     } catch (error) {
-      alert(`Error: ${error.message}`);
+      showAlert('Error', `Error: ${error.message}`);
     } finally {
       reloading = false;
     }
   }
 
-  function refresh() {
-    dispatch('refresh');
+  function handleCancelReload() {
+    showConfirmModal = false;
+  }
+
+  function showAlert(title, message) {
+    alertTitle = title;
+    alertMessage = message;
+    showAlertModal = true;
+  }
+
+  function handleAlertOk() {
+    showAlertModal = false;
   }
 
   function switchView(view) {
@@ -76,12 +104,25 @@
   </div>
 
   <div class="toolbar-right">
-    <button on:click={refresh} title="Refresh file tree">
-      🔄 Refresh
-    </button>
-    <button on:click={testNginx} disabled={testing}>
-      {testing ? '⏳ Testing...' : '✓ Test Config'}
-    </button>
+    <div class="config-status">
+      <span class="status-label">Nginx Config Status:</span>
+      <button
+        class="status-icon {configStatus}"
+        on:click={testNginx}
+        disabled={testing}
+        title={configStatus === 'ok' ? 'Config OK - Click to retest' : configStatus === 'error' ? 'Config Error - Click to retest' : 'Click to test config'}
+      >
+        {#if testing}
+          ⏳
+        {:else if configStatus === 'ok'}
+          🟢
+        {:else if configStatus === 'error'}
+          🔴
+        {:else}
+          ⚪
+        {/if}
+      </button>
+    </div>
     <button on:click={reloadNginx} disabled={reloading} class="reload-btn">
       {reloading ? '⏳ Reloading...' : '↻ Reload Nginx'}
     </button>
@@ -113,6 +154,27 @@
   </div>
 {/if}
 
+{#if showConfirmModal}
+  <ConfirmModal
+    title="Confirm Reload"
+    message="Are you sure you want to reload nginx?"
+    confirmText="Reload"
+    cancelText="Cancel"
+    on:confirm={handleConfirmReload}
+    on:cancel={handleCancelReload}
+    bind:show={showConfirmModal}
+  />
+{/if}
+
+{#if showAlertModal}
+  <AlertModal
+    title={alertTitle}
+    message={alertMessage}
+    on:ok={handleAlertOk}
+    bind:show={showAlertModal}
+  />
+{/if}
+
 <style>
   .toolbar {
     display: flex;
@@ -135,6 +197,50 @@
   .toolbar-center, .toolbar-right {
     display: flex;
     gap: 8px;
+    align-items: center;
+  }
+
+  .config-status {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .status-label {
+    font-size: 13px;
+    color: #fff;
+    white-space: nowrap;
+  }
+
+  .status-icon {
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 2px;
+    border-radius: 3px;
+    transition: background-color 0.2s;
+  }
+
+  .status-icon:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .status-icon:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  .status-icon.ok {
+    color: #4caf50;
+  }
+
+  .status-icon.error {
+    color: #f44336;
+  }
+
+  .status-icon.unknown {
+    color: #9e9e9e;
   }
 
   button {
@@ -152,6 +258,21 @@
 
   button.reload-btn:hover {
     background: #1a9970;
+  }
+
+  .modal-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 16px;
+  }
+
+  .confirm-btn {
+    background: #f44336;
+  }
+
+  .confirm-btn:hover {
+    background: #d32f2f;
   }
 
   .test-output {

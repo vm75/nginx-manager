@@ -1,12 +1,14 @@
 <script>
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, tick } from 'svelte';
+  import { apiFetch } from '../lib/api';
 
-  let activeTab = 'access';
+  let activeTab = 'error';
   let accessLog = '';
   let errorLog = '';
   let certObtainLog = '';
   let autoRefresh = true;
   let refreshInterval;
+  let logContentElement;
 
   onMount(() => {
     loadLogs();
@@ -40,17 +42,25 @@
   async function loadLogs() {
     try {
       if (activeTab === 'access') {
-        const response = await fetch('/api/logs/access?lines=500');
+        const response = await apiFetch('/api/logs/access?lines=500');
         accessLog = await response.text();
       } else if (activeTab === 'error') {
-        const response = await fetch('/api/logs/error?lines=500');
+        const response = await apiFetch('/api/logs/error?lines=500');
         errorLog = await response.text();
       } else if (activeTab === 'cert-obtain') {
-        const response = await fetch('/api/logs/cert-obtain?lines=500');
+        const response = await apiFetch('/api/logs/cert-obtain?lines=500');
         certObtainLog = await response.text();
       }
+      await tick();
+      scrollToBottom();
     } catch (error) {
       console.error('Error loading logs:', error);
+    }
+  }
+
+  function scrollToBottom() {
+    if (logContentElement) {
+      logContentElement.scrollTop = logContentElement.scrollHeight;
     }
   }
 
@@ -103,7 +113,7 @@
     </div>
   </div>
 
-  <div class="log-content">
+  <div class="log-content" bind:this={logContentElement}>
     {#if activeTab === 'access'}
       <pre class="log-text">{accessLog || 'No access log entries'}</pre>
     {:else if activeTab === 'error'}

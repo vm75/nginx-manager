@@ -1,6 +1,9 @@
 <script>
   import { createEventDispatcher, onMount } from 'svelte';
   import TreeNode from './TreeNode.svelte';
+  import { apiFetch } from '../lib/api';
+  import ConfirmModal from './ConfirmModal.svelte';
+  import AlertModal from './AlertModal.svelte';
 
   export let refresh = 0;
 
@@ -19,24 +22,29 @@
   let symlinkName = '';
   let symlinkTarget = '';
   let symlinkParentPath = '/';
+  let showMoveConfirm = false;
+  let showDeleteConfirm = false;
+  let moveParams = null;
+  let deleteParams = null;
+  let showAlertModal = false;
+  let alertTitle = '';
+  let alertMessage = '';
 
   onMount(() => {
     loadFiles('/');
   });
 
-  $: if (refresh) {
-    loadFiles('/');
-  }
+  // Removed refresh prop handling since refresh is now handled locally
 
   async function loadFiles(path) {
     try {
-      const response = await fetch(`/api/files?path=${encodeURIComponent(path)}`);
+      const response = await apiFetch(`/api/files?path=${encodeURIComponent(path)}`);
       const data = await response.json();
 
       if (path === '/') {
-        files = buildTree(data || []);
+        files = await buildTree(data || []);
       } else {
-        updateTreeNode(files, path, data || []);
+        await updateTreeNode(files, path, data || []);
       }
       files = files; // Trigger reactivity
     } catch (error) {
@@ -44,35 +52,56 @@
     }
   }
 
-  function buildTree(items) {
+  async function buildTree(items) {
     if (!items || !Array.isArray(items)) {
       return [];
     }
-    return items.map(item => ({
-      ...item,
-      children: item.isDir ? [] : null,
-      loaded: false
-    })).sort((a, b) => {
+    const tree = await Promise.all(items
+      .filter(item => item.name !== 'sites-enabled') // Hide sites-enabled folder
+      .map(async item => {
+        const node = {
+          ...item,
+          children: item.isDir ? [] : null,
+          loaded: false
+        };
+        if (item.isDir && expandedDirs.has(item.path)) {
+          node.loaded = true;
+          node.children = await loadChildren(item.path);
+        }
+        return node;
+      }));
+    return tree.sort((a, b) => {
       if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
       return a.name.localeCompare(b.name);
     });
   }
 
-  function updateTreeNode(tree, path, items) {
+  async function loadChildren(path) {
+    try {
+      const response = await apiFetch(`/api/files?path=${encodeURIComponent(path)}`);
+      const data = await response.json();
+      return await buildTree(data || []);
+    } catch (error) {
+      console.error('Error loading children:', error);
+      return [];
+    }
+  }
+
+  async function updateTreeNode(tree, path, items) {
     for (let node of tree) {
       if (node.path === path && node.isDir) {
-        node.children = buildTree(items);
+        node.children = await buildTree(items);
         node.loaded = true;
         return true;
       }
-      if (node.children && updateTreeNode(node.children, path, items)) {
+      if (node.children && await updateTreeNode(node.children, path, items)) {
         return true;
       }
     }
     return false;
   }
 
-  function toggleDir(node) {
+  async function toggleDir(node) {
     if (!node.isDir) return;
 
     if (expandedDirs.has(node.path)) {
@@ -80,7 +109,7 @@
     } else {
       expandedDirs.add(node.path);
       if (!node.loaded) {
-        loadFiles(node.path);
+        await loadFiles(node.path);
       }
     }
     expandedDirs = expandedDirs;
@@ -106,12 +135,23 @@
     event.preventDefault();
     if (!draggedItem || !targetNode.isDir) return;
 
+    const itemName = draggedItem.path.split('/').pop();
+    const targetName = targetNode.path.split('/').pop();
+    moveParams = { draggedItem, targetNode, itemName, targetName };
+    showMoveConfirm = true;
+  }
+
+  async function handleConfirmMove() {
+    const { draggedItem: item, targetNode } = moveParams;
+    showMoveConfirm = false;
+    moveParams = null;
+
     try {
-      const response = await fetch('/api/file/move', {
+      const response = await apiFetch('/api/file/move', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sourcePath: draggedItem.path,
+          sourcePath: ih,
           targetPath: targetNode.path
         })
       });
@@ -120,12 +160,18 @@
         loadFiles('/');
       } else {
         const error = await response.json();
-        alert(`Error: ${error.error}`);
+        showAlert('Error', `Error: ${error.error}`);
       }
     } catch (error) {
-      alert(`Error: ${error.message}`);
+      showAlert('Error', `Error: ${error.message}`);
     }
 
+    draggedItem = null;
+  }
+
+  function handleCancelMove() {
+    showMoveConfirm = false;
+    moveParams = null;
     draggedItem = null;
   }
 
@@ -158,7 +204,7 @@
       : `${createParentPath}/${createName}`;
 
     try {
-      const response = await fetch('/api/file/create', {
+      const response = await apiFetch('/api/file/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path, isDir: createIsDir })
@@ -169,18 +215,25 @@
         loadFiles('/');
       } else {
         const error = await response.json();
-        alert(`Error: ${error.error}`);
+        showAlert('Error', `Error: ${error.error}`);
       }
     } catch (error) {
-      alert(`Error: ${error.message}`);
+      showAlert('Error', `Error: ${error.message}`);
     }
   }
 
-  async function deleteItem(node) {
-    if (!confirm(`Are you sure you want to delete ${node.name}?`)) return;
+  function deleteItem(node) {
+    deleteParams = { node };
+    showDeleteConfirm = true;
+  }
+
+  async function handleConfirmDelete() {
+    const { node } = deleteParams;
+    showDeleteConfirm = false;
+    deleteParams = null;
 
     try {
-      const response = await fetch('/api/file/delete', {
+      const response = await apiFetch('/api/file/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path: node.path })
@@ -190,12 +243,27 @@
         loadFiles('/');
       } else {
         const error = await response.json();
-        alert(`Error: ${error.error}`);
+        showAlert('Error', `Error: ${error.error}`);
       }
     } catch (error) {
-      alert(`Error: ${error.message}`);
+      showAlert('Error', `Error: ${error.message}`);
     }
+  }
+
+  function handleCancelDelete() {
+    showDeleteConfirm = false;
+    deleteParams = null;
     hideContextMenu();
+  }
+
+  function showAlert(title, message) {
+    alertTitle = title;
+    alertMessage = message;
+    showAlertModal = true;
+  }
+
+  function handleAlertOk() {
+    showAlertModal = false;
   }
 
   async function renameItem(node) {
@@ -206,7 +274,7 @@
     const newPath = dir === '/' ? `/${newName}` : `${dir}/${newName}`;
 
     try {
-      const response = await fetch('/api/file/rename', {
+      const response = await apiFetch('/api/file/rename', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ oldPath: node.path, newPath })
@@ -216,10 +284,10 @@
         loadFiles('/');
       } else {
         const error = await response.json();
-        alert(`Error: ${error.error}`);
+        showAlert('Error', `Error: ${error.error}`);
       }
     } catch (error) {
-      alert(`Error: ${error.message}`);
+      showAlert('Error', `Error: ${error.message}`);
     }
     hideContextMenu();
   }
@@ -240,7 +308,7 @@
       : `${symlinkParentPath}/${symlinkName}`;
 
     try {
-      const response = await fetch('/api/file/symlink', {
+      const response = await apiFetch('/api/file/symlink', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ linkPath, targetPath: symlinkTarget })
@@ -251,10 +319,10 @@
         loadFiles('/');
       } else {
         const error = await response.json();
-        alert(`Error: ${error.error}`);
+        showAlert('Error', `Error: ${error.error}`);
       }
     } catch (error) {
-      alert(`Error: ${error.message}`);
+      showAlert('Error', `Error: ${error.message}`);
     }
   }
 </script>
@@ -265,6 +333,7 @@
   <div class="browser-header">
     <h3>📁 Files</h3>
     <div class="header-actions">
+      <button on:click={() => loadFiles('/')} title="Refresh file tree">🔄</button>
       <button on:click={() => openCreateModal(false, '/')} title="New File">📄</button>
       <button on:click={() => openCreateModal(true, '/')} title="New Folder">📁</button>
     </div>
@@ -382,6 +451,39 @@
       </div>
     </div>
   </div>
+{/if}
+
+{#if showMoveConfirm}
+  <ConfirmModal
+    title="Move File"
+    message={`Move "${moveParams?.itemName}" to "${moveParams?.targetName}"?`}
+    confirmText="Move"
+    cancelText="Cancel"
+    on:confirm={handleConfirmMove}
+    on:cancel={handleCancelMove}
+    bind:show={showMoveConfirm}
+  />
+{/if}
+
+{#if showDeleteConfirm}
+  <ConfirmModal
+    title="Delete File"
+    message={`Are you sure you want to delete ${deleteParams?.node?.name}?`}
+    confirmText="Delete"
+    cancelText="Cancel"
+    on:confirm={handleConfirmDelete}
+    on:cancel={handleCancelDelete}
+    bind:show={showDeleteConfirm}
+  />
+{/if}
+
+{#if showAlertModal}
+  <AlertModal
+    title={alertTitle}
+    message={alertMessage}
+    on:ok={handleAlertOk}
+    bind:show={showAlertModal}
+  />
 {/if}
 
 <style>

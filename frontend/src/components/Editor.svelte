@@ -1,5 +1,7 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
+  import { createEventDispatcher } from 'svelte';
+  import { apiFetch } from '../lib/api';
   import * as monaco from 'monaco-editor';
   import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
   import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker';
@@ -8,6 +10,8 @@
   import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
 
   export let file = null;
+
+  const dispatch = createEventDispatcher();
 
   let editorContainer;
   let editor;
@@ -126,7 +130,7 @@
 
   async function loadFile(fileInfo) {
     try {
-      const response = await fetch(`/api/file/read?path=${encodeURIComponent(fileInfo.path)}`);
+      const response = await apiFetch(`/api/file/read?path=${encodeURIComponent(fileInfo.path)}`);
       currentContent = await response.text();
 
       editor.setValue(currentContent);
@@ -160,7 +164,7 @@
     saveStatus = 'Saving...';
 
     try {
-      const response = await fetch('/api/file/write', {
+      const response = await apiFetch('/api/file/write', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -173,6 +177,7 @@
         currentContent = editor.getValue();
         saveStatus = '✓ Saved';
         setTimeout(() => saveStatus = '', 2000);
+        dispatch('configSaved');
       } else {
         const error = await response.json();
         saveStatus = `✗ Error: ${error.error}`;

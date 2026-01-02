@@ -1,43 +1,64 @@
 <script>
+  import { onMount } from 'svelte';
   import FileBrowser from './components/FileBrowser.svelte';
   import Editor from './components/Editor.svelte';
   import Logs from './components/Logs.svelte';
   import Certificates from './components/Certificates.svelte';
   import Toolbar from './components/Toolbar.svelte';
+  import { apiFetch } from './lib/api';
 
   let currentFile = null;
   let currentView = 'editor'; // 'editor', 'logs', or 'certificates'
-  let refreshBrowser = 0;
+  let configStatus = 'unknown'; // 'unknown', 'ok', 'error'
+
+  onMount(() => {
+    testConfig();
+  });
 
   function handleFileSelect(event) {
     currentFile = event.detail;
     currentView = 'editor';
   }
 
-  function handleRefresh() {
-    refreshBrowser++;
-  }
-
   function handleViewChange(view) {
     currentView = view;
+  }
+
+  async function testConfig(status = null) {
+    if (status) {
+      configStatus = status;
+      return;
+    }
+    try {
+      const response = await apiFetch('/api/nginx/test', { method: 'POST' });
+      const result = await response.json();
+      configStatus = result.success ? 'ok' : 'error';
+    } catch (error) {
+      configStatus = 'error';
+    }
+  }
+
+  function handleConfigSaved() {
+    testConfig();
   }
 </script>
 
 <div class="app-container">
   <Toolbar
-    on:refresh={handleRefresh}
     on:viewChange={(e) => handleViewChange(e.detail)}
     currentView={currentView}
+    configStatus={configStatus}
+    testConfig={testConfig}
   />
 
   <div class="main-content">
     <aside class="sidebar">
-      <FileBrowser on:fileSelect={handleFileSelect} refresh={refreshBrowser} />
+      <FileBrowser on:fileSelect={handleFileSelect} />
     </aside>
 
     <main class="content">
       {#if currentView === 'editor'}
-        <Editor file={currentFile} />
+        <Editor file={currentFile} on:configSaved={handleConfigSaved} />
       {:else if currentView === 'logs'}
         <Logs />
       {:else if currentView === 'certificates'}

@@ -1,6 +1,8 @@
-# Nginx Config Editor
+# Nginx Manager
 
-A lightweight web-based editor for nginx configuration files with a modern, responsive interface.
+A comprehensive nginx management platform with a modern web UI, configuration editor, SSL certificate management, and fail2ban security.
+
+> **Repository**: [vm75/nginx-manager](https://github.com/vm75/nginx-manager)
 
 ## Features
 
@@ -33,7 +35,7 @@ A lightweight web-based editor for nginx configuration files with a modern, resp
 # Using docker-compose
 docker-compose up -d
 
-# Access the editor
+# Access the web UI
 open http://localhost:8080
 
 # Nginx runs on
@@ -44,10 +46,10 @@ open http://localhost:80
 
 ```bash
 # Run with default nginx config directory (/etc/nginx)
-./nginx-editor
+./nginx-manager
 
 # Specify custom config directory
-./nginx-editor -config /path/to/nginx/config -port 8080
+./nginx-manager -config /path/to/nginx/config -port 8080
 ```
 
 ---
@@ -62,7 +64,7 @@ npm run build
 cd ..
 
 # Build Go binary
-go build -o nginx-editor
+go build -o nginx-manager
 
 # Or use build script
 chmod +x build.sh
@@ -87,7 +89,7 @@ npm run dev
 ### Features
 
 - **Nginx**: Web server and reverse proxy
-- **Nginx Editor**: Web UI on port 8080
+- **Web UI**: Management interface on port 8080
 - **Fail2ban**: Automatic IP banning for security
 - **Lego**: Let's Encrypt ACME client (170+ DNS providers)
 - **Cron**: Automatic certificate renewal (daily at 2 AM)
@@ -111,7 +113,7 @@ docker-compose down
 ```yaml
 environment:
   - TZ=UTC
-  - NGINX_EDITOR_PORT=8080
+  - NGINX_MANAGER_PORT=8080
   - CERT_RENEWAL_DAYS=5  # Days before expiry to renew
 ```
 
@@ -119,17 +121,17 @@ environment:
 
 ```yaml
 volumes:
-  - /DATA/docker/nginx-proxy/config:/etc/nginx    # Nginx config
-  - /DATA/docker/nginx-proxy/logs:/var/log/nginx  # Nginx logs
-  - /DATA/docker/nginx-proxy/fail2ban:/var/log/fail2ban
-  - /DATA/docker/nginx-proxy/certs:/etc/nginx/certs
+  - /DATA/docker/nginx-manager/config:/etc/nginx    # Nginx config
+  - /DATA/docker/nginx-manager/logs:/var/log/nginx  # Nginx logs
+  - /DATA/docker/nginx-manager/fail2ban:/var/log/fail2ban
+  - /DATA/docker/nginx-manager/certs:/etc/nginx/ssl  # SSL certificates
 ```
 
 ### Docker Commands
 
 ```bash
 # Enter container
-docker exec -it nginx-proxy sh
+docker exec -it nginx-manager sh
 
 # Check services
 supervisorctl status
@@ -138,10 +140,29 @@ supervisorctl status
 fail2ban-client status
 
 # Manually trigger certificate renewal
-docker exec nginx-proxy /usr/local/bin/renew-certs.sh
+docker exec nginx-manager /usr/local/bin/renew-certs.sh
 
 # View renewal log
-docker exec nginx-proxy tail -f /var/log/cert-renewal.log
+docker exec nginx-manager tail -f /var/log/cert-renewal.log
+```
+
+### Makefile Commands
+
+A Makefile is provided for convenience:
+
+```bash
+make up          # Start containers
+make down        # Stop containers
+make logs        # View logs
+make restart     # Restart containers
+make shell       # Open shell in container
+make status      # Show supervisor status
+make nginx-test  # Test nginx config
+make nginx-reload # Reload nginx
+make fail2ban-status # Check fail2ban status
+make build       # Build Docker image
+make rebuild     # Clean rebuild
+make help        # Show all available commands
 ```
 
 ---
@@ -220,11 +241,14 @@ This generates a certificate for **both** `example.com` and `*.example.com`
 
 Certificates are stored in:
 ```
-<config-dir>/ssl/
-├── example.com.crt     # Certificate (644)
-├── example.com.key     # Private key (600)
-└── .lego/              # Lego working directory
-    └── certificates/   # Original certificates
+<config-dir>/ssl/              # Certificate directory
+├── example.com.crt            # Certificate (644)
+├── example.com.key            # Private key (600)
+└── .lego/                     # Lego working directory
+    └── certificates/          # Original certificates
+        ├── example.com.crt
+        ├── example.com.key
+        └── example.com.json   # Metadata
 ```
 
 ### Nginx Configuration
@@ -310,6 +334,10 @@ chmod +x ~/renew-certs.sh
 ### Certificates
 - `GET /api/certificates` - List SSL certificates
 - `POST /api/certificates/obtain` - Obtain new certificate
+- `POST /api/certificates/delete` - Delete certificate
+
+### Additional Logs
+- `GET /api/logs/cert-obtain` - Get certificate obtain log
 
 ---
 
@@ -319,7 +347,7 @@ chmod +x ~/renew-certs.sh
 1. **Capabilities**: Requires `NET_ADMIN` and `NET_RAW` for fail2ban
 2. **Port Restrictions**: Restrict port 8080 access with firewall
 3. **SSL/TLS**: Always use HTTPS in production
-4. **Authentication**: Add reverse proxy authentication for the editor
+4. **Authentication**: Add reverse proxy authentication for the web UI
 
 ### Fail2ban Jails
 Pre-configured jails:
@@ -390,7 +418,7 @@ sudo chmod 644 /etc/nginx/ssl/*.crt
 sudo chmod 600 /etc/nginx/ssl/*.key
 
 # View certificate obtain logs
-docker exec nginx-proxy tail -100 /var/log/cert-obtain.log
+docker exec nginx-manager tail -100 /var/log/cert-obtain.log
 
 # Refresh browser
 ```
@@ -400,19 +428,19 @@ docker exec nginx-proxy tail -100 /var/log/cert-obtain.log
 **Container won't start**
 ```bash
 # Check logs
-docker-compose logs nginx-proxy
+docker-compose logs nginx-manager
 
 # Check nginx config
-docker exec nginx-proxy nginx -t
+docker exec nginx-manager nginx -t
 ```
 
 **Services not running**
 ```bash
 # Check supervisor
-docker exec nginx-proxy supervisorctl status
+docker exec nginx-manager supervisorctl status
 
 # Restart service
-docker exec nginx-proxy supervisorctl restart nginx
+docker exec nginx-manager supervisorctl restart nginx
 ```
 
 ---
