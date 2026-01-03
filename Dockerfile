@@ -16,7 +16,7 @@ RUN go build -o nginx-manager main.go
 
 FROM alpine:latest
 
-# Install nginx, fail2ban, lego, cron, and other dependencies
+# Install nginx, fail2ban, acme.sh, cron, and other dependencies
 RUN apk add --no-cache \
     nginx \
     fail2ban \
@@ -30,10 +30,8 @@ RUN apk add --no-cache \
     openssl \
     wget \
     logrotate \
-    && wget -O /tmp/lego.tar.gz https://github.com/go-acme/lego/releases/download/v4.15.0/lego_v4.15.0_linux_amd64.tar.gz \
-    && tar -xzf /tmp/lego.tar.gz -C /usr/local/bin \
-    && chmod +x /usr/local/bin/lego \
-    && rm /tmp/lego.tar.gz
+    && curl https://get.acme.sh | sh \
+    && ln -s /root/.acme.sh/acme.sh /usr/local/bin/acme.sh
 
 # Create necessary directories
 RUN mkdir -p /var/log/nginx \

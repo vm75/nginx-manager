@@ -16,13 +16,20 @@
   let alertMessage = '';
 
   // Form data
-  let domain = '';
+  let domains = [];
+  let domainInput = '';
   let email = '';
   let challenge = 'http-01';
   let provider = '';
-  let wildcard = false;
   let staging = false;
+  let force = false;
   let envVars = [{ key: '', value: '' }];
+
+  // Reactive: Check if any domain is a wildcard
+  $: hasWildcard = domains.some(d => d.startsWith('*.'));
+  $: if (hasWildcard && challenge !== 'dns-01') {
+    challenge = 'dns-01';
+  }
 
   // Common DNS providers for quick reference
   const commonProviders = [
@@ -102,18 +109,42 @@
     showAlertModal = false;
   }
 
+  function addDomain() {
+    const trimmed = domainInput.trim();
+    if (!trimmed) return;
+
+    if (domains.includes(trimmed)) {
+      showAlert('Validation Error', 'Domain already added');
+      return;
+    }
+
+    domains = [...domains, trimmed];
+    domainInput = '';
+  }
+
+  function removeDomain(domain) {
+    domains = domains.filter(d => d !== domain);
+  }
+
+  function handleDomainKeyPress(event) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      addDomain();
+    }
+  }
+
   async function obtainCertificate() {
-    if (!domain || !email) {
-      showAlert('Validation Error', 'Please fill in domain and email');
+    if (domains.length === 0 || !email) {
+      showAlert('Validation Error', 'Please add at least one domain and provide an email');
       return;
     }
 
-    if ((challenge === 'dns-01' || wildcard) && !provider) {
-      showAlert('Validation Error', 'Please specify a DNS provider');
+    if (challenge === 'dns-01' && !provider) {
+      showAlert('Validation Error', 'Please specify a DNS provider for DNS-01 challenge');
       return;
     }
 
-    if ((challenge === 'dns-01' || wildcard) && envVars.every(v => !v.key || !v.value)) {
+    if (challenge === 'dns-01' && envVars.every(v => !v.key || !v.value)) {
       showAlert('Validation Error', 'Please provide at least one environment variable for your DNS provider');
       return;
     }
@@ -121,17 +152,17 @@
     obtaining = true;
     try {
       const payload = {
-        domain,
+        domains,
         email,
-        challenge: wildcard ? 'dns-01' : challenge,
-        wildcard,
+        challenge,
         staging,
-        provider: (challenge === 'dns-01' || wildcard) ? provider : '',
+        force,
+        provider: challenge === 'dns-01' ? provider : '',
         credentials: {}
       };
 
       // Add environment variables as credentials
-      if (challenge === 'dns-01' || wildcard) {
+      if (challenge === 'dns-01') {
         envVars.forEach(v => {
           if (v.key && v.value) {
             payload.credentials[v.key] = v.value;
@@ -163,12 +194,13 @@
   }
 
   function resetForm() {
-    domain = '';
+    domains = [];
+    domainInput = '';
     email = '';
     challenge = 'http-01';
     provider = '';
-    wildcard = false;
     staging = false;
+    force = false;
     envVars = [{ key: '', value: '' }];
   }
 
@@ -296,14 +328,45 @@
 
       <div class="modal-body">
         <div class="form-group">
-          <label for="domain">Domain *</label>
-          <input
-            id="domain"
-            type="text"
-            bind:value={domain}
-            placeholder="example.com"
-            disabled={obtaining}
-          />
+          <label for="domainInput">Domains *</label>
+          <div class="domain-input-container">
+            <input
+              id="domainInput"
+              type="text"
+              bind:value={domainInput}
+              on:keypress={handleDomainKeyPress}
+              placeholder="example.com or *.example.com"
+              disabled={obtaining}
+            />
+            <button
+              type="button"
+              class="btn-add-domain"
+              on:click={addDomain}
+              disabled={obtaining || !domainInput.trim()}
+            >
+              Add
+            </button>
+          </div>
+          <p class="hint">Add each domain separately. Use *.domain.com for wildcard domains. Press Enter or click Add.</p>
+
+          {#if domains.length > 0}
+            <div class="domain-pills">
+              {#each domains as domain}
+                <div class="domain-pill">
+                  <span class="pill-text">{domain}</span>
+                  <button
+                    type="button"
+                    class="pill-remove"
+                    on:click={() => removeDomain(domain)}
+                    disabled={obtaining}
+                    title="Remove domain"
+                  >
+                    ×
+                  </button>
+                </div>
+              {/each}
+            </div>
+          {/if}
         </div>
 
         <div class="form-group">
@@ -319,17 +382,6 @@
 
         <div class="form-group">
           <label>
-            <input type="checkbox" bind:checked={wildcard} disabled={obtaining} />
-            Include wildcard certificate (*.{domain || 'example.com'})
-          </label>
-          {#if wildcard}
-            <p class="hint">✓ Will generate certificate for both {domain || 'example.com'} AND *.{domain || 'example.com'}</p>
-            <p class="hint">Note: Wildcard certificates require DNS-01 challenge</p>
-          {/if}
-        </div>
-
-        <div class="form-group">
-          <label>
             <input type="checkbox" bind:checked={staging} disabled={obtaining} />
             Use Let's Encrypt Staging (for testing)
           </label>
@@ -341,22 +393,36 @@
         </div>
 
         <div class="form-group">
+          <label>
+            <input type="checkbox" bind:checked={force} disabled={obtaining} />
+            Force renewal (re-issue existing certificates)
+          </label>
+          {#if force}
+            <p class="hint">⚠️ Will re-issue the certificate even if it already exists and hasn't expired.</p>
+          {:else}
+            <p class="hint">💡 Enable to replace existing certificates (e.g., when switching from staging to production)</p>
+          {/if}
+        </div>
+
+        <div class="form-group">
           <label for="challenge">Challenge Type *</label>
-          <select id="challenge" bind:value={challenge} disabled={obtaining || wildcard}>
+          <select id="challenge" bind:value={challenge} disabled={obtaining || hasWildcard}>
             <option value="http-01">HTTP-01 (Port 80 required)</option>
             <option value="dns-01">DNS-01 (DNS API required)</option>
             <option value="tls-alpn-01">TLS-ALPN-01 (Port 443 required)</option>
           </select>
-          {#if wildcard}
-            <p class="hint">DNS-01 is automatically used for wildcard certificates</p>
+          {#if hasWildcard}
+            <p class="hint">🔒 DNS-01 is required for wildcard domains</p>
+          {:else}
+            <p class="hint">💡 Use DNS-01 for wildcard domains (*.example.com)</p>
           {/if}
         </div>
 
-        {#if challenge === 'dns-01' || wildcard}
+        {#if challenge === 'dns-01'}
           <div class="form-group">
             <label for="provider">DNS Provider Code *
-              <a href="https://go-acme.github.io/lego/dns/" target="_blank" rel="noopener" style="font-size: 12px; margin-left: 5px;">
-                📚 View all 170+ providers
+              <a href="https://github.com/acmesh-official/acme.sh/wiki/dnsapi" target="_blank" rel="noopener" style="font-size: 12px; margin-left: 5px;">
+                📚 View all 150+ providers
               </a>
             </label>
             <input
@@ -366,7 +432,7 @@
               placeholder="e.g., cloudflare, route53, gcloud, digitalocean"
               disabled={obtaining}
             />
-            <small>Enter the lego provider code (lowercase)</small>
+            <small>Enter the acme.sh DNS provider code (lowercase, without dns_ prefix)</small>
           </div>
 
           <div class="common-providers">
@@ -432,22 +498,22 @@
         <div class="info-box">
           <h4>ℹ️ Information</h4>
           <ul>
-            {#if challenge === 'http-01' && !wildcard}
+            {#if challenge === 'http-01'}
               <li>HTTP-01 requires port 80 accessible from internet</li>
               <li>Domain must point to this server's IP address</li>
               <li>Cannot be used for wildcard certificates</li>
-            {:else if challenge === 'tls-alpn-01' && !wildcard}
+            {:else if challenge === 'tls-alpn-01'}
               <li>TLS-ALPN-01 requires port 443 accessible from internet</li>
               <li>Domain must point to this server's IP address</li>
               <li>Cannot be used for wildcard certificates</li>
             {:else}
               <li>DNS-01 requires DNS provider API access</li>
-              <li>Can issue wildcard certificates</li>
+              <li>Can issue wildcard certificates (*.domain.com)</li>
               <li>DNS propagation may take a few minutes</li>
-              <li>Supports all 170+ DNS providers in lego</li>
+              <li>Supports all 150+ DNS providers in acme.sh</li>
             {/if}
-            {#if wildcard}
-              <li><strong>Wildcard mode:</strong> Generates a single certificate covering both {domain || 'example.com'} and *.{domain || 'example.com'}</li>
+            {#if domains.length > 1}
+              <li><strong>Multiple domains:</strong> Will generate a single certificate for all {domains.length} domains</li>
             {/if}
             <li>Certificates saved to ssl/ directory</li>
             <li>Rate limit: 50 certificates per domain per week</li>
@@ -787,6 +853,87 @@
   .form-group select:focus {
     outline: none;
     border-color: #0066cc;
+  }
+
+  .domain-input-container {
+    display: flex;
+    gap: 8px;
+  }
+
+  .domain-input-container input {
+    flex: 1;
+  }
+
+  .btn-add-domain {
+    padding: 10px 20px;
+    background: #0066cc;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .btn-add-domain:hover:not(:disabled) {
+    background: #0052a3;
+  }
+
+  .btn-add-domain:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+  }
+
+  .domain-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .domain-pill {
+    display: inline-flex;
+    align-items: center;
+    background: #e3f2fd;
+    border: 1px solid #90caf9;
+    border-radius: 20px;
+    padding: 6px 12px;
+    font-size: 14px;
+    color: #1565c0;
+    gap: 8px;
+  }
+
+  .pill-text {
+    font-weight: 500;
+  }
+
+  .pill-remove {
+    background: transparent;
+    border: none;
+    color: #1565c0;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s;
+  }
+
+  .pill-remove:hover:not(:disabled) {
+    background: #1565c0;
+    color: white;
+  }
+
+  .pill-remove:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   .credentials-section {

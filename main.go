@@ -48,13 +48,13 @@ type CertificateInfo struct {
 }
 
 type ObtainCertRequest struct {
-	Domain      string            `json:"domain"`
+	Domains     []string          `json:"domains"`
 	Email       string            `json:"email"`
 	Challenge   string            `json:"challenge"` // "http-01" or "dns-01"
 	Provider    string            `json:"provider"`  // "namesilo", "duckdns", "namecheap"
 	Credentials map[string]string `json:"credentials"`
-	Wildcard    bool              `json:"wildcard"`
 	Staging     bool              `json:"staging"` // Use Let's Encrypt staging server
+	Force       bool              `json:"force"`   // Force renewal even if cert exists
 }
 
 func main() {
@@ -724,7 +724,7 @@ func parseCertificate(certPath string) *CertificateInfo {
 	return info
 }
 
-// Obtain certificate using lego
+// Obtain certificate using acme.sh
 func handleObtainCertificate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -748,13 +748,13 @@ func handleObtainCertificate(w http.ResponseWriter, r *http.Request) {
 		log.Println(message) // Also log to stdout
 	}
 
-	logCertOp(fmt.Sprintf("========================================\nCertificate obtain request started - Domain: %s, Challenge: %s, Provider: %s, Wildcard: %v, Staging: %v",
-		req.Domain, req.Challenge, req.Provider, req.Wildcard, req.Staging))
+	logCertOp(fmt.Sprintf("========================================\nCertificate obtain request started - Domains: %v, Challenge: %s, Provider: %s, Staging: %v, Force: %v",
+		req.Domains, req.Challenge, req.Provider, req.Staging, req.Force))
 
 	// Validate request
-	if req.Domain == "" || req.Email == "" {
-		logCertOp("ERROR: Domain and email are required")
-		sendError(w, "Domain and email are required", http.StatusBadRequest)
+	if len(req.Domains) == 0 || req.Email == "" {
+		logCertOp("ERROR: At least one domain and email are required")
+		sendError(w, "At least one domain and email are required", http.StatusBadRequest)
 		return
 	}
 
@@ -768,72 +768,89 @@ func handleObtainCertificate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Prepare lego directory
-	legoDir := filepath.Join(configDir, ".lego")
-	os.MkdirAll(legoDir, 0755)
+	// Prepare acme.sh directory
+	acmeDir := "/root/.acme.sh"
+	os.MkdirAll(acmeDir, 0755)
 
 	// Prepare certificate output directory
 	sslDir := filepath.Join(configDir, "ssl")
 	os.MkdirAll(sslDir, 0755)
 
-	// Build lego command
+	// Build acme.sh command
 	args := []string{
+		"--issue",
 		"--email", req.Email,
-		"--domains", req.Domain,
-		"--path", legoDir,
-		"--accept-tos",
+		"--debug", // Add debug output
+	}
+
+	// Add force flag if requested
+	if req.Force {
+		args = append(args, "--force")
+		logCertOp("Force renewal enabled")
+	}
+
+	// Add all domains
+	for _, domain := range req.Domains {
+		args = append(args, "--domain", domain)
+		logCertOp(fmt.Sprintf("Adding domain: %s", domain))
 	}
 
 	// Use staging server if requested (for testing)
 	if req.Staging {
-		args = append(args, "--server", "https://acme-staging-v02.api.letsencrypt.org/directory")
+		args = append(args, "--server", "letsencrypt_test")
 		logCertOp("Using Let's Encrypt STAGING server (test certificates)")
-	}
-
-	// Add wildcard domain if requested
-	if req.Wildcard {
-		wildcardDomain := "*." + req.Domain
-		args = append(args, "--domains", wildcardDomain)
+	} else {
+		args = append(args, "--server", "letsencrypt")
+		logCertOp("Using Let's Encrypt production server")
 	}
 
 	// Add challenge type
 	if req.Challenge == "http-01" {
-		args = append(args, "--http")
+		args = append(args, "--webroot", "/var/www/html")
 	} else if req.Challenge == "dns-01" {
-		args = append(args, "--dns", req.Provider)
-		// Add DNS resolvers to avoid Docker's internal DNS issues
-		args = append(args, "--dns.resolvers", "8.8.8.8:53")
-		args = append(args, "--dns.resolvers", "1.1.1.1:53")
+		// Convert provider name to acme.sh format (usually dns_<provider>)
+		dnsProvider := "dns_" + strings.ToLower(req.Provider)
+		args = append(args, "--dns", dnsProvider)
 	} else if req.Challenge == "tls-alpn-01" {
-		args = append(args, "--tls")
+		args = append(args, "--alpn")
 	}
 
-	args = append(args, "run")
-
-	logCertOp(fmt.Sprintf("Lego command: lego %s", strings.Join(args, " ")))
+	logCertOp(fmt.Sprintf("Acme.sh command: acme.sh %s", strings.Join(args, " ")))
 
 	// Set environment variables for DNS providers
-	cmd := exec.Command("lego", args...)
+	cmd := exec.Command("acme.sh", args...)
 	env := os.Environ()
 
 	// Add all credentials as environment variables
 	if req.Challenge == "dns-01" {
+		// Map provider names to acme.sh environment variable names
+		envVarMap := map[string]string{
+			"duckdns":    "DuckDNS_Token",
+			"cloudflare": "CF_Token", // or CF_Key/CF_Email
+			"digitalocean": "DO_API_KEY",
+			"godaddy":    "GD_Key", // and GD_Secret
+			"namecheap":  "NAMECHEAP_API_USER", // and NAMECHEAP_API_KEY
+			// Add other providers as needed
+		}
+
 		for key, value := range req.Credentials {
 			if value != "" {
-				env = append(env, key+"="+value)
-				logCertOp(fmt.Sprintf("Setting environment variable: %s", key))
+				// Use mapped env var name if available, otherwise use the key as-is
+				envVarName := key
+				if mapped, exists := envVarMap[strings.ToLower(req.Provider)]; exists {
+					envVarName = mapped
+				}
+				env = append(env, envVarName+"="+value)
+				logCertOp(fmt.Sprintf("Setting environment variable: %s", envVarName))
 			}
 		}
-		// Set DNS timeout for DNS-01 challenges (10 minutes for DuckDNS propagation)
-		env = append(env, "LEGO_DNS_TIMEOUT=600")
-		logCertOp("DNS-01 challenge selected, setting DNS timeout to 600 seconds")
-		logCertOp("Using public DNS resolvers (8.8.8.8, 1.1.1.1) via --dns.resolvers flag for propagation checks")
+		logCertOp("DNS-01 challenge selected")
 	}
 
 	cmd.Env = env
 
-	// Execute lego with timeout
-	logCertOp("Executing lego command...")
+	// Execute acme.sh with timeout
+	logCertOp("Executing acme.sh command...")
 
 	// Create a channel to signal command completion
 	done := make(chan error, 1)
@@ -858,7 +875,7 @@ func handleObtainCertificate(w http.ResponseWriter, r *http.Request) {
 	select {
 	case err = <-done:
 		// Command completed
-		logCertOp(fmt.Sprintf("Lego command completed. Output length: %d bytes", len(output)))
+		logCertOp(fmt.Sprintf("Acme.sh command completed. Output length: %d bytes", len(output)))
 	case <-time.After(timeout):
 		cmd.Process.Kill()
 		err = fmt.Errorf("certificate obtain timeout after %v", timeout)
@@ -866,7 +883,7 @@ func handleObtainCertificate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Log output
-	logCertOp(fmt.Sprintf("Lego output:\n%s", string(output)))
+	logCertOp(fmt.Sprintf("Acme.sh output:\n%s", string(output)))
 
 	if err != nil {
 		logCertOp(fmt.Sprintf("ERROR: Certificate obtain failed: %v", err))
@@ -879,11 +896,27 @@ func handleObtainCertificate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Copy certificates to ssl directory
-	certSource := filepath.Join(legoDir, "certificates", req.Domain+".crt")
-	keySource := filepath.Join(legoDir, "certificates", req.Domain+".key")
+	// acme.sh stores certs in ~/.acme.sh/domain_ecc/
+	// Use the first domain as the primary domain for certificate storage
+	primaryDomain := req.Domains[0]
 
-	certDest := filepath.Join(sslDir, req.Domain+".crt")
-	keyDest := filepath.Join(sslDir, req.Domain+".key")
+	// For source paths, use the actual domain name (acme.sh keeps wildcard in folder names)
+	sourceDomain := primaryDomain
+
+	// For destination paths, remove wildcard prefix to create clean filenames
+	destDomain := primaryDomain
+	if strings.HasPrefix(destDomain, "*.") {
+		destDomain = destDomain[2:]
+	}
+
+	domainDir := sourceDomain + "_ecc"
+	// acme.sh uses fullchain.cer for the certificate (without domain prefix)
+	// but uses domain.key for the key file (with full domain name including wildcard)
+	certSource := filepath.Join(acmeDir, domainDir, "fullchain.cer")
+	keySource := filepath.Join(acmeDir, domainDir, sourceDomain+".key")
+
+	certDest := filepath.Join(sslDir, destDomain+".crt")
+	keyDest := filepath.Join(sslDir, destDomain+".key")
 
 	logCertOp(fmt.Sprintf("Copying certificates from %s to %s", certSource, certDest))
 
@@ -909,7 +942,7 @@ func handleObtainCertificate(w http.ResponseWriter, r *http.Request) {
 		logCertOp(fmt.Sprintf("ERROR: Failed to read key file: %v", err))
 	}
 
-	logCertOp(fmt.Sprintf("Certificate obtain completed successfully for %s\n========================================", req.Domain))
+	logCertOp(fmt.Sprintf("Certificate obtain completed successfully for domains: %v\n========================================", req.Domains))
 
 	sendJSON(w, map[string]interface{}{
 		"success":  true,

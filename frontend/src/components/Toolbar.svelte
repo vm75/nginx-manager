@@ -3,6 +3,7 @@
   import { apiFetch } from '../lib/api';
   import ConfirmModal from './ConfirmModal.svelte';
   import AlertModal from './AlertModal.svelte';
+  import logo from '../../logo.png';
 
   export let currentView;
   export let configStatus = 'unknown';
@@ -79,7 +80,7 @@
 
 <div class="toolbar">
   <div class="toolbar-left">
-    <h1><img src="../logo.png" alt="Logo" style="height: 18px; vertical-align: middle;" /> Nginx Manager</h1>
+    <h1><img src={logo} alt="Logo" style="height: 18px; vertical-align: middle;" /> Nginx Manager</h1>
   </div>
 
   <div class="toolbar-center">

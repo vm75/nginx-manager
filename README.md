@@ -91,7 +91,7 @@ npm run dev
 - **Nginx**: Web server and reverse proxy
 - **Web UI**: Management interface on port 8080
 - **Fail2ban**: Automatic IP banning for security
-- **Lego**: Let's Encrypt ACME client (170+ DNS providers)
+- **acme.sh**: Let's Encrypt ACME client (150+ DNS providers)
 - **Cron**: Automatic certificate renewal (daily at 2 AM)
 - **Supervisor**: Process management
 
@@ -169,20 +169,14 @@ make help        # Show all available commands
 
 ## Certificate Management
 
-### Install Lego (for standalone)
+### Install acme.sh (for standalone)
 
 ```bash
-# Linux
-wget https://github.com/go-acme/lego/releases/download/v4.15.0/lego_v4.15.0_linux_amd64.tar.gz
-tar xf lego_v4.15.0_linux_amd64.tar.gz
-sudo mv lego /usr/local/bin/
-sudo chmod +x /usr/local/bin/lego
-
-# macOS
-brew install lego
+# Install acme.sh
+curl https://get.acme.sh | sh
 
 # Verify
-lego --version
+acme.sh --version
 ```
 
 ### Challenge Types
@@ -235,7 +229,7 @@ This generates a certificate for **both** `example.com` and `*.example.com`
 | DuckDNS | `duckdns` | `DUCKDNS_TOKEN` |
 | GoDaddy | `godaddy` | `GODADDY_API_KEY`, `GODADDY_API_SECRET` |
 
-[View all 170+ providers →](https://go-acme.github.io/lego/dns/)
+[View all 150+ providers →](https://github.com/acmesh-official/acme.sh/wiki/dnsapi)
 
 ### Certificate Storage
 
@@ -244,11 +238,12 @@ Certificates are stored in:
 <config-dir>/ssl/              # Certificate directory
 ├── example.com.crt            # Certificate (644)
 ├── example.com.key            # Private key (600)
-└── .lego/                     # Lego working directory
-    └── certificates/          # Original certificates
-        ├── example.com.crt
-        ├── example.com.key
-        └── example.com.json   # Metadata
+└── .acme.sh/                  # acme.sh working directory
+    └── example.com/           # Domain directory
+        ├── example.com.cer    # Certificate
+        ├── example.com.key    # Private key
+        ├── fullchain.cer      # Full chain
+        └── ca.cer             # CA certificate
 ```
 
 ### Nginx Configuration
@@ -286,16 +281,20 @@ Create a cron job:
 cat > ~/renew-certs.sh << 'EOF'
 #!/bin/bash
 CONFIG_DIR="/etc/nginx"
-LEGO_DIR="$CONFIG_DIR/.lego"
+ACME_DIR="/root/.acme.sh"
 SSL_DIR="$CONFIG_DIR/ssl"
 
-# Renew (adjust provider and credentials)
-CLOUDFLARE_DNS_API_TOKEN="your_token" \
-  lego --path "$LEGO_DIR" renew --days 5
+# Renew all certificates
+/root/.acme.sh/acme.sh --renew-all
 
 # Copy certificates
-cp "$LEGO_DIR/certificates/"*.crt "$SSL_DIR/"
-cp "$LEGO_DIR/certificates/"*.key "$SSL_DIR/"
+for cert_dir in "$ACME_DIR"/*; do
+  if [ -d "$cert_dir" ] && [ -f "$cert_dir/fullchain.cer" ]; then
+    domain=$(basename "$cert_dir")
+    cp "$cert_dir/fullchain.cer" "$SSL_DIR/$domain.crt"
+    cp "$cert_dir/$domain.key" "$SSL_DIR/$domain.key"
+  fi
+done
 chmod 644 "$SSL_DIR/"*.crt
 chmod 600 "$SSL_DIR/"*.key
 
@@ -376,7 +375,7 @@ Pre-configured jails:
 The system now includes comprehensive logging for all certificate operations:
 - View logs in the web UI: Logs → 🔐 Certificate Obtain tab
 - Check log file: `/var/log/cert-obtain.log`
-- Includes full lego output, timestamps, and error details
+- Includes full acme.sh output, timestamps, and error details
 - DNS-01 challenges have a 10-minute timeout
 - HTTP-01 challenges have a 2-minute timeout
 
@@ -450,7 +449,7 @@ docker exec nginx-manager supervisorctl restart nginx
 - Go 1.21+
 - Node.js 18+
 - nginx installed (for test/reload functionality)
-- lego (for SSL certificate management)
+- acme.sh (for SSL certificate management)
 - Docker & Docker Compose (for containerized deployment)
 
 ---
@@ -461,7 +460,7 @@ MIT
 
 ## Links
 
-- [Lego Documentation](https://go-acme.github.io/lego/)
+- [acme.sh Documentation](https://github.com/acmesh-official/acme.sh)
 - [Let's Encrypt Documentation](https://letsencrypt.org/docs/)
 - [Nginx Documentation](https://nginx.org/en/docs/)
 - [Monaco Editor](https://microsoft.github.io/monaco-editor/)

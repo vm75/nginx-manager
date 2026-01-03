@@ -5,8 +5,6 @@
   import ConfirmModal from './ConfirmModal.svelte';
   import AlertModal from './AlertModal.svelte';
 
-  export let refresh = 0;
-
   const dispatch = createEventDispatcher();
 
   let files = [];
@@ -33,8 +31,6 @@
   onMount(() => {
     loadFiles('/');
   });
-
-  // Removed refresh prop handling since refresh is now handled locally
 
   async function loadFiles(path) {
     try {

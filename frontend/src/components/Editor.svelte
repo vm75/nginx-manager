@@ -135,6 +135,8 @@
 
       editor.setValue(currentContent);
       editor.updateOptions({ readOnly: false });
+      // Force LF line endings
+      editor.getModel().setEOL(monaco.editor.EndOfLineSequence.LF);
 
       // Detect language based on file extension
       const ext = fileInfo.name.split('.').pop().toLowerCase();
@@ -164,6 +166,8 @@
     saveStatus = 'Saving...';
 
     try {
+      // Ensure LF line endings before saving
+      editor.getModel().setEOL(monaco.editor.EndOfLineSequence.LF);
       const response = await apiFetch('/api/file/write', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
