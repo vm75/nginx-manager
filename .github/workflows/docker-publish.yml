@@ -9,8 +9,11 @@ on:
 
 jobs:
   build-and-push:
+    name: Build and push Docker image
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
