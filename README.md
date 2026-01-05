@@ -6,7 +6,11 @@ A comprehensive nginx management platform with a modern web UI, configuration ed
 
 ## Features
 
-- 📁 File browser with tree view
+- � **Dashboard** with system monitoring and container management
+  - System resource monitoring (CPU, Memory, Disk, Network)
+  - Docker/Podman/Incus container management
+  - Quick launch icons (persistent)
+- �📁 File browser with tree view
 - ✏️ Code editor with nginx syntax highlighting (Monaco Editor)
 - 🔄 Test and reload nginx configurations
 - 📊 View access and error logs (auto-parsed from nginx.conf)
@@ -121,11 +125,21 @@ environment:
 
 ```yaml
 volumes:
-  - /DATA/docker/nginx-manager/config:/etc/nginx    # Nginx config
-  - /DATA/docker/nginx-manager/logs:/var/log/nginx  # Nginx logs
-  - /DATA/docker/nginx-manager/fail2ban:/var/log/fail2ban
-  - /DATA/docker/nginx-manager/certs:/etc/nginx/ssl  # SSL certificates
+  - /DATA/docker/nginx-manager/nginx-config:/etc/nginx       # Nginx config
+  - /DATA/docker/nginx-manager/nginx-logs:/var/log/nginx     # Nginx logs
+  - /DATA/docker/nginx-manager/fail2ban:/var/log/fail2ban    # Fail2ban logs
+  - /DATA/docker/nginx-manager/certs:/etc/nginx/ssl          # SSL certificates
+  - /DATA/docker/nginx-manager/app-data:/app/data            # Dashboard icons, settings
+  - /proc:/host/proc:ro                                       # System monitoring
+  - /sys:/host/sys:ro                                         # System monitoring
+  - /var/run/docker.sock:/var/run/docker.sock:ro             # Docker management
+  - /var/lib/incus/unix.socket:/var/lib/incus/unix.socket:ro # Incus management (optional)
 ```
+
+**Note**: The dashboard features require:
+- Host `/proc` and `/sys` for system resource monitoring
+- Docker socket for container management
+- Incus socket for Incus container management (if available)
 
 ### Docker Commands
 

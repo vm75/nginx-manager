@@ -12,20 +12,32 @@ services:
       - "8080:8080"
     volumes:
       # Nginx configuration (persistent)
-      - /DATA/docker/nginx-manager/config:/etc/nginx
+      - /DATA/docker/nginx-manager/nginx-config:/etc/nginx
       # Nginx logs
-      - /DATA/docker/nginx-manager/logs:/var/log/nginx
+      - /DATA/docker/nginx-manager/nginx-logs:/var/log/nginx
       # Fail2ban logs
       - /DATA/docker/nginx-manager/fail2ban:/var/log/fail2ban
       # SSL certificates (if using Let's Encrypt)
       - /DATA/docker/nginx-manager/certs:/etc/nginx/ssl
+      # Nginx Manager app data (dashboard icons, settings, etc.)
+      - /DATA/docker/nginx-manager/app-data:/app/data
+      # Host system information for monitoring
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      # Docker socket for container management
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Incus socket for container management (if available)
+      - /var/lib/incus/unix.socket:/var/lib/incus/unix.socket:ro
     environment:
       - TZ=UTC
       - NGINX_MANAGER_PORT=8080
       - CERT_RENEWAL_DAYS=5
+      - INCUS_GROUP_ID=${INCUS_GROUP_ID:-979}
     cap_add:
       - NET_ADMIN
       - NET_RAW
+    group_add:
+      - "${INCUS_GROUP_ID:-979}"  # incus-admin group for Incus socket access
     networks:
       - nginx-net
 

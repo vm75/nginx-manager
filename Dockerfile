@@ -16,7 +16,7 @@ RUN go build -o nginx-manager main.go
 
 FROM alpine:latest
 
-# Install nginx, fail2ban, acme.sh, cron, and other dependencies
+# Install nginx, fail2ban, acme.sh, cron, docker-cli and other dependencies
 RUN apk add --no-cache \
     nginx \
     fail2ban \
@@ -30,8 +30,13 @@ RUN apk add --no-cache \
     openssl \
     wget \
     logrotate \
+    docker-cli \
     && curl https://get.acme.sh | sh \
     && ln -s /root/.acme.sh/acme.sh /usr/local/bin/acme.sh
+
+# Install Incus CLI binary
+RUN curl -fsSL https://github.com/lxc/incus/releases/download/v6.20.0/bin.linux.incus.x86_64 -o /usr/local/bin/incus \
+    && chmod +x /usr/local/bin/incus
 
 # Create necessary directories
 RUN mkdir -p /var/log/nginx \

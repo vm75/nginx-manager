@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import Dashboard from './components/Dashboard.svelte';
   import FileBrowser from './components/FileBrowser.svelte';
   import Editor from './components/Editor.svelte';
   import Logs from './components/Logs.svelte';
@@ -8,7 +9,7 @@
   import { apiFetch } from './lib/api';
 
   let currentFile = null;
-  let currentView = 'editor'; // 'editor', 'logs', or 'certificates'
+  let currentView = 'dashboard'; // 'dashboard', 'editor', 'logs', or 'certificates'
   let configStatus = 'unknown'; // 'unknown', 'ok', 'error'
 
   onMount(() => {
@@ -52,19 +53,25 @@
   />
 
   <div class="main-content">
-    <aside class="sidebar">
-      <FileBrowser on:fileSelect={handleFileSelect} />
-    </aside>
+    {#if currentView === 'dashboard'}
+      <main class="content full-width">
+        <Dashboard />
+      </main>
+    {:else}
+      <aside class="sidebar">
+        <FileBrowser on:fileSelect={handleFileSelect} />
+      </aside>
 
-    <main class="content">
-      {#if currentView === 'editor'}
-        <Editor file={currentFile} on:configSaved={handleConfigSaved} />
-      {:else if currentView === 'logs'}
-        <Logs />
-      {:else if currentView === 'certificates'}
-        <Certificates />
-      {/if}
-    </main>
+      <main class="content">
+        {#if currentView === 'editor'}
+          <Editor file={currentFile} on:configSaved={handleConfigSaved} />
+        {:else if currentView === 'logs'}
+          <Logs />
+        {:else if currentView === 'certificates'}
+          <Certificates />
+        {/if}
+      </main>
+    {/if}
   </div>
 </div>
 
@@ -97,6 +104,10 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
+  }
+
+  .content.full-width {
+    width: 100%;
   }
 
   @media (max-width: 768px) {

@@ -85,6 +85,12 @@
 
   <div class="toolbar-center">
     <button
+      class:active={currentView === 'dashboard'}
+      on:click={() => switchView('dashboard')}
+    >
+      🏠 Dashboard
+    </button>
+    <button
       class:active={currentView === 'editor'}
       on:click={() => switchView('editor')}
     >
