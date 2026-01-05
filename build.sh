@@ -2,7 +2,7 @@
 
 set -e
 
-echo "🔨 Building Nginx Manager..."
+echo "🔨 Building Server Manager..."
 
 # Build frontend
 echo "📦 Building frontend..."
@@ -13,12 +13,12 @@ cd ..
 
 # Build Go binary
 echo "🔧 Building Go binary..."
-go build -o nginx-manager main.go
+go build -o server-manager main.go
 
 echo "✅ Build complete!"
 echo ""
 echo "Run the server with:"
-echo "  ./nginx-manager -config /etc/nginx"
+echo "  ./server-manager -config /etc/nginx"
 echo ""
 echo "Or for development:"
-echo "  ./nginx-manager -config ./test-config -port 8080"
+echo "  ./server-manager -config ./test-config -port 8080"

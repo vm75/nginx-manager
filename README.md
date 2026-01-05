@@ -1,27 +1,47 @@
-# Nginx Manager
+# Server Manager
 
-A comprehensive nginx management platform with a modern web UI, configuration editor, SSL certificate management, and fail2ban security.
+A comprehensive web-based server management platform with nginx configuration, SSL certificate management, fail2ban security, and system monitoring.
 
-> **Repository**: [vm75/nginx-manager](https://github.com/vm75/nginx-manager)
+> **Repository**: [vm75/server-manager](https://github.com/vm75/server-manager)
 
 ## Features
 
-- � **Dashboard** with system monitoring and container management
+### 📊 System Management
+- **Dashboard** with real-time monitoring
   - System resource monitoring (CPU, Memory, Disk, Network)
   - Docker/Podman/Incus container management
   - Quick launch icons (persistent)
-- �📁 File browser with tree view
+
+### 🌐 Nginx Management
+- 📁 File browser with tree view for nginx configurations
 - ✏️ Code editor with nginx syntax highlighting (Monaco Editor)
 - 🔄 Test and reload nginx configurations
 - 📊 View access and error logs (auto-parsed from nginx.conf)
 - ➕ Create, delete, rename files and folders
 - 🎯 Drag and drop file operations
 - 🔗 Create and manage symlinks (for sites-enabled)
-- 🔐 SSL certificate management with Let's Encrypt
+
+### 🔐 SSL Certificate Management
+- Let's Encrypt integration with auto-renewal
+- Support for HTTP-01, TLS-ALPN-01, and DNS-01 challenge types
 - 🌐 Wildcard certificate support (170+ DNS providers)
-- 🔄 Automatic certificate renewal
-- 🐳 Docker support with nginx and fail2ban included
-- 🚀 Single binary deployment
+- Automatic certificate renewal (configurable)
+- Certificate status monitoring
+
+### 🔒 Security
+- 🛡️ Fail2ban integration with pre-configured jails
+- Automatic IP banning for:
+  - Failed HTTP authentication
+  - Script kiddie attempts
+  - Bad bot detection
+  - Proxy attempt blocking
+  - Rate limit violations
+  - Bot search patterns
+
+### 🐳 Deployment
+- Docker support with nginx and fail2ban included
+- Single binary standalone deployment
+- Docker/Incus container management via dashboard
 
 ## Tech Stack
 
@@ -50,10 +70,10 @@ open http://localhost:80
 
 ```bash
 # Run with default nginx config directory (/etc/nginx)
-./nginx-manager
+./server-manager
 
 # Specify custom config directory
-./nginx-manager -config /path/to/nginx/config -port 8080
+./server-manager -config /path/to/nginx/config -port 8080
 ```
 
 ---
@@ -68,7 +88,7 @@ npm run build
 cd ..
 
 # Build Go binary
-go build -o nginx-manager
+go build -o server-manager
 
 # Or use build script
 chmod +x build.sh
@@ -117,7 +137,7 @@ docker-compose down
 ```yaml
 environment:
   - TZ=UTC
-  - NGINX_MANAGER_PORT=8080
+  - SERVER_MANAGER_PORT=8080
   - CERT_RENEWAL_DAYS=5  # Days before expiry to renew
 ```
 
@@ -125,15 +145,15 @@ environment:
 
 ```yaml
 volumes:
-  - /DATA/docker/nginx-manager/nginx-config:/etc/nginx       # Nginx config
-  - /DATA/docker/nginx-manager/nginx-logs:/var/log/nginx     # Nginx logs
-  - /DATA/docker/nginx-manager/fail2ban:/var/log/fail2ban    # Fail2ban logs
-  - /DATA/docker/nginx-manager/certs:/etc/nginx/ssl          # SSL certificates
-  - /DATA/docker/nginx-manager/app-data:/app/data            # Dashboard icons, settings
-  - /proc:/host/proc:ro                                       # System monitoring
-  - /sys:/host/sys:ro                                         # System monitoring
-  - /var/run/docker.sock:/var/run/docker.sock:ro             # Docker management
-  - /var/lib/incus/unix.socket:/var/lib/incus/unix.socket:ro # Incus management (optional)
+  - /DATA/docker/server-manager/nginx-config:/etc/nginx       # Nginx config
+  - /DATA/docker/server-manager/nginx-logs:/var/log/nginx     # Nginx logs
+  - /DATA/docker/server-manager/fail2ban:/var/log/fail2ban    # Fail2ban logs
+  - /DATA/docker/server-manager/certs:/etc/nginx/ssl          # SSL certificates
+  - /DATA/docker/server-manager/app-data:/app/data            # Dashboard icons, settings
+  - /proc:/host/proc:ro                                        # System monitoring
+  - /sys:/host/sys:ro                                          # System monitoring
+  - /var/run/docker.sock:/var/run/docker.sock:ro              # Docker management
+  - /var/lib/incus/unix.socket:/var/lib/incus/unix.socket:ro  # Incus management (optional)
 ```
 
 **Note**: The dashboard features require:
@@ -145,7 +165,7 @@ volumes:
 
 ```bash
 # Enter container
-docker exec -it nginx-manager sh
+docker exec -it server-manager sh
 
 # Check services
 supervisorctl status
@@ -154,10 +174,10 @@ supervisorctl status
 fail2ban-client status
 
 # Manually trigger certificate renewal
-docker exec nginx-manager /usr/local/bin/renew-certs.sh
+docker exec server-manager /usr/local/bin/renew-certs.sh
 
 # View renewal log
-docker exec nginx-manager tail -f /var/log/cert-renewal.log
+docker exec server-manager tail -f /var/log/cert-renewal.log
 ```
 
 ### Makefile Commands
@@ -386,7 +406,7 @@ Pre-configured jails:
 
 **Viewing Certificate Obtain Logs**
 
-The system now includes comprehensive logging for all certificate operations:
+The system includes comprehensive logging for all certificate operations:
 - View logs in the web UI: Logs → 🔐 Certificate Obtain tab
 - Check log file: `/var/log/cert-obtain.log`
 - Includes full acme.sh output, timestamps, and error details
@@ -431,7 +451,7 @@ sudo chmod 644 /etc/nginx/ssl/*.crt
 sudo chmod 600 /etc/nginx/ssl/*.key
 
 # View certificate obtain logs
-docker exec nginx-manager tail -100 /var/log/cert-obtain.log
+docker exec server-manager tail -100 /var/log/cert-obtain.log
 
 # Refresh browser
 ```
@@ -441,20 +461,28 @@ docker exec nginx-manager tail -100 /var/log/cert-obtain.log
 **Container won't start**
 ```bash
 # Check logs
-docker-compose logs nginx-manager
+docker-compose logs server-manager
 
 # Check nginx config
-docker exec nginx-manager nginx -t
+docker exec server-manager nginx -t
 ```
 
 **Services not running**
 ```bash
 # Check supervisor
-docker exec nginx-manager supervisorctl status
+docker exec server-manager supervisorctl status
 
 # Restart service
-docker exec nginx-manager supervisorctl restart nginx
+docker exec server-manager supervisorctl restart nginx
 ```
+
+---
+
+## Future Roadmap
+
+- **PHP Support**: PHP-FPM configuration and management
+- **Docker Management**: Extended container configuration and deployment
+- **Incus Management**: Full Incus container lifecycle management
 
 ---
 

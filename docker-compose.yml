@@ -1,10 +1,10 @@
 services:
-  nginx-manager:
+  server-manager:
     build:
       context: .
       dockerfile: Dockerfile
-    image: vm75/nginx-manager:latest
-    container_name: nginx-manager
+    image: vm75/server-manager:latest
+    container_name: server-manager
     restart: unless-stopped
     ports:
       - "80:80"
@@ -12,15 +12,15 @@ services:
       - "8080:8080"
     volumes:
       # Nginx configuration (persistent)
-      - /DATA/docker/nginx-manager/nginx-config:/etc/nginx
+      - /DATA/docker/server-manager/nginx-config:/etc/nginx
       # Nginx logs
-      - /DATA/docker/nginx-manager/nginx-logs:/var/log/nginx
+      - /DATA/docker/server-manager/nginx-logs:/var/log/nginx
       # Fail2ban logs
-      - /DATA/docker/nginx-manager/fail2ban:/var/log/fail2ban
+      - /DATA/docker/server-manager/fail2ban:/var/log/fail2ban
       # SSL certificates (if using Let's Encrypt)
-      - /DATA/docker/nginx-manager/certs:/etc/nginx/ssl
-      # Nginx Manager app data (dashboard icons, settings, etc.)
-      - /DATA/docker/nginx-manager/app-data:/app/data
+      - /DATA/docker/server-manager/certs:/etc/nginx/ssl
+      # Server Manager app data (dashboard icons, settings, etc.)
+      - /DATA/docker/server-manager/app-data:/app/data
       # Host system information for monitoring
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
@@ -30,7 +30,7 @@ services:
       - /var/lib/incus/unix.socket:/var/lib/incus/unix.socket:ro
     environment:
       - TZ=UTC
-      - NGINX_MANAGER_PORT=8080
+      - SERVER_MANAGER_PORT=8080
       - CERT_RENEWAL_DAYS=5
       - INCUS_GROUP_ID=${INCUS_GROUP_ID:-979}
     cap_add:

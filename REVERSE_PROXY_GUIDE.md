@@ -1,6 +1,6 @@
 # Reverse Proxy Guide
 
-This guide shows how to set up nginx as a reverse proxy for nginx-manager, either as a subdomain or subfolder.
+This guide shows how to set up nginx as a reverse proxy for server-manager, either as a subdomain or subfolder.
 
 ## Subdomain Setup
 
@@ -18,7 +18,7 @@ server {
 }
 ```
 
-Replace `manager.example.com` with your subdomain and `your-server-ip` with the IP where nginx-manager is running.
+Replace `manager.example.com` with your subdomain and `your-server-ip` with the IP where server-manager is running.
 
 ## Subfolder Setup
 
@@ -34,20 +34,20 @@ server {
         # ... your main site
     }
 
-    # Nginx manager at /nginx/
-    location /nginx {
-        return 301 $scheme://$host/nginx/;
+    # Server manager at /manager/
+    location /manager {
+        return 301 $scheme://$host/manager/;
     }
 
-    location ^~ /nginx/ {
+    location ^~ /manager/ {
         proxy_pass http://your-server-ip:8080/;
         include snippets/proxy.conf;
-        rewrite ^/nginx/(.*) /$1 break;
+        rewrite ^/manager/(.*) /$1 break;
     }
 }
 ```
 
-Access nginx-manager at `http://example.com/nginx/`.
+Access server-manager at `http://example.com/manager/`.
 
 ## SSL/HTTPS
 

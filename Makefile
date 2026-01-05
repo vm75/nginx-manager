@@ -24,19 +24,19 @@ restart: ## Restart containers
 	docker compose restart
 
 shell: ## Open shell in running container
-	docker compose exec nginx-manager sh
+	docker compose exec server-manager sh
 
 status: ## Show status of services
-	docker compose exec nginx-manager supervisorctl status
+	docker compose exec server-manager supervisorctl status
 
 nginx-test: ## Test nginx configuration
-	docker compose exec nginx-manager nginx -t
+	docker compose exec server-manager nginx -t
 
 nginx-reload: ## Reload nginx
-	docker compose exec nginx-manager nginx -s reload
+	docker compose exec server-manager nginx -s reload
 
 fail2ban-status: ## Show fail2ban status
-	docker compose exec nginx-manager fail2ban-client status
+	docker compose exec server-manager fail2ban-client status
 
 clean: ## Stop and remove containers, networks, and volumes
 	docker compose down -v

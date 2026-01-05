@@ -12,7 +12,7 @@ WORKDIR /build
 COPY go.mod ./
 COPY main.go ./
 COPY --from=frontend-builder /build/dist ./frontend/dist
-RUN go build -o nginx-manager main.go
+RUN go build -o server-manager main.go
 
 FROM alpine:latest
 
@@ -68,9 +68,9 @@ RUN cat <<EOF > /etc/logrotate.d/nginx
 }
 EOF
 
-# Copy nginx-manager binary
-COPY --from=backend-builder /build/nginx-manager /usr/local/bin/nginx-manager
-RUN chmod +x /usr/local/bin/nginx-manager
+# Copy server-manager binary
+COPY --from=backend-builder /build/server-manager /usr/local/bin/server-manager
+RUN chmod +x /usr/local/bin/server-manager
 
 # Copy fail2ban configurations
 COPY docker/fail2ban/jail.local /etc/fail2ban/jail.local

@@ -3,7 +3,7 @@
 .gitignore
 
 # Build artifacts
-nginx-manager
+server-manager
 frontend/node_modules
 frontend/dist
 
